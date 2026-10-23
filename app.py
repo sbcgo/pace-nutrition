@@ -1,6 +1,7 @@
 
 import streamlit as st
 from collections import defaultdict
+from copy import deepcopy
 
 st.set_page_config(
     page_title="PACE Nutrition",
@@ -9,111 +10,122 @@ st.set_page_config(
 )
 
 st.title("🥗 PACE Nutrition")
-st.subheader("Deine Ernährung passend zu Training, Zielen und Budget")
-st.caption("Version 5 – mehrere Trainingseinheiten pro Tag")
+st.caption("Deine Ernährung abgestimmt auf Training, Regeneration und Muskelaufbau.")
 
 # --------------------------------------------------
-# 1. REZEPTE: NÄHRWERTE PRO BASISPORTION
+# 1. REZEPTDATEN
+# Nährwerte und Zutaten sind Näherungswerte pro Portion.
+# Mengen werden für die Einkaufsliste mit skaliert.
 # --------------------------------------------------
 
 RECIPES = {
     "Porridge mit Beeren und Skyr": {
         "category": "Frühstück",
-        "kcal": 520, "protein": 35, "carbs": 72, "fat": 9,
+        "kcal": 480, "protein": 34, "carbs": 65, "fat": 9,
         "ingredients": {
-            "Haferflocken (g)": 70, "Skyr (g)": 200,
-            "Beeren (g)": 100, "Banane (g)": 80
-        }
+            "Haferflocken (g)": 70,
+            "Skyr (g)": 200,
+            "Beeren (g)": 100,
+            "Honig (g)": 10,
+        },
     },
     "Overnight Oats mit Apfel": {
         "category": "Frühstück",
-        "kcal": 490, "protein": 31, "carbs": 70, "fat": 10,
+        "kcal": 460, "protein": 28, "carbs": 66, "fat": 9,
         "ingredients": {
-            "Haferflocken (g)": 65, "Magerquark (g)": 150,
-            "Apfel (g)": 150, "Milch (ml)": 100
-        }
+            "Haferflocken (g)": 65,
+            "Magerquark (g)": 150,
+            "Apfel (g)": 120,
+            "Milch (ml)": 100,
+        },
     },
     "Eier mit Brot und Hüttenkäse": {
         "category": "Frühstück",
-        "kcal": 510, "protein": 34, "carbs": 45, "fat": 19,
+        "kcal": 490, "protein": 35, "carbs": 43, "fat": 18,
         "ingredients": {
-            "Eier (Stück)": 2, "Vollkornbrot (g)": 100,
-            "Hüttenkäse (g)": 100, "Tomaten (g)": 100
-        }
+            "Eier (Stück)": 2,
+            "Vollkornbrot (g)": 100,
+            "Hüttenkäse (g)": 100,
+        },
     },
     "Poulet mit Reis und Gemüse": {
         "category": "Mittagessen",
-        "kcal": 650, "protein": 48, "carbs": 85, "fat": 10,
+        "kcal": 620, "protein": 48, "carbs": 78, "fat": 11,
         "ingredients": {
-            "Pouletbrust (g)": 160, "Reis trocken (g)": 100,
-            "Gemüse (g)": 200, "Olivenöl (g)": 5
-        }
+            "Pouletbrust (g)": 160,
+            "Reis, trocken (g)": 90,
+            "Gemüse (g)": 200,
+            "Olivenöl (g)": 5,
+        },
     },
     "Linsen-Bolognese mit Pasta": {
         "category": "Mittagessen",
-        "kcal": 620, "protein": 28, "carbs": 95, "fat": 12,
+        "kcal": 610, "protein": 29, "carbs": 91, "fat": 12,
         "ingredients": {
-            "Vollkornpasta trocken (g)": 100,
-            "Linsen gekocht (g)": 150, "Passata (g)": 150,
-            "Zwiebel (g)": 50, "Olivenöl (g)": 5
-        }
+            "Vollkornpasta, trocken (g)": 100,
+            "Linsen, gekocht (g)": 150,
+            "Passata (g)": 150,
+            "Parmesan (g)": 10,
+        },
     },
     "Tofu mit Reis und Gemüse": {
         "category": "Mittagessen",
-        "kcal": 630, "protein": 30, "carbs": 78, "fat": 20,
+        "kcal": 600, "protein": 29, "carbs": 75, "fat": 19,
         "ingredients": {
-            "Tofu (g)": 150, "Reis trocken (g)": 90,
-            "Gemüse (g)": 200, "Sojasauce (ml)": 15
-        }
+            "Tofu (g)": 150,
+            "Reis, trocken (g)": 80,
+            "Gemüse (g)": 200,
+            "Sojasauce (ml)": 15,
+        },
     },
     "Skyr-Bananen-Snack": {
         "category": "Snack",
-        "kcal": 300, "protein": 25, "carbs": 43, "fat": 3,
+        "kcal": 330, "protein": 28, "carbs": 48, "fat": 3,
         "ingredients": {
-            "Skyr (g)": 200, "Banane (g)": 120,
-            "Haferflocken (g)": 20
-        }
+            "Skyr (g)": 200,
+            "Banane (g)": 120,
+            "Haferflocken (g)": 25,
+        },
     },
     "Brot mit Hüttenkäse": {
         "category": "Snack",
-        "kcal": 310, "protein": 22, "carbs": 40, "fat": 6,
+        "kcal": 300, "protein": 21, "carbs": 38, "fat": 6,
         "ingredients": {
-            "Vollkornbrot (g)": 80, "Hüttenkäse (g)": 150,
-            "Gurke (g)": 100
-        }
+            "Vollkornbrot (g)": 80,
+            "Hüttenkäse (g)": 120,
+        },
     },
     "Lachs mit Kartoffeln und Gemüse": {
         "category": "Abendessen",
-        "kcal": 650, "protein": 40, "carbs": 65, "fat": 24,
+        "kcal": 650, "protein": 42, "carbs": 65, "fat": 23,
         "ingredients": {
-            "Lachs (g)": 150, "Kartoffeln (g)": 250,
-            "Gemüse (g)": 200, "Olivenöl (g)": 5
-        }
+            "Lachs (g)": 150,
+            "Kartoffeln (g)": 250,
+            "Gemüse (g)": 200,
+            "Olivenöl (g)": 5,
+        },
     },
-    "Poulet mit Ofenkartoffeln": {
+    "Poulet mit Kartoffeln aus dem Ofen": {
         "category": "Abendessen",
-        "kcal": 620, "protein": 48, "carbs": 65, "fat": 12,
+        "kcal": 590, "protein": 48, "carbs": 62, "fat": 12,
         "ingredients": {
-            "Pouletbrust (g)": 160, "Kartoffeln (g)": 300,
-            "Gemüse (g)": 150, "Olivenöl (g)": 5
-        }
+            "Pouletbrust (g)": 160,
+            "Kartoffeln (g)": 300,
+            "Gemüse (g)": 200,
+            "Olivenöl (g)": 5,
+        },
     },
     "Kichererbsen-Curry mit Reis": {
         "category": "Abendessen",
-        "kcal": 640, "protein": 22, "carbs": 95, "fat": 18,
+        "kcal": 640, "protein": 22, "carbs": 94, "fat": 18,
         "ingredients": {
-            "Kichererbsen gekocht (g)": 180,
-            "Reis trocken (g)": 80,
-            "Kokosmilch light (ml)": 100, "Passata (g)": 100
-        }
-    }
+            "Kichererbsen, gekocht (g)": 160,
+            "Reis, trocken (g)": 75,
+            "Kokosmilch light (ml)": 100,
+            "Gemüse (g)": 150,
+        },
+    },
 }
-
-MEAL_CATEGORIES = ["Frühstück", "Mittagessen", "Snack", "Abendessen"]
-
-# --------------------------------------------------
-# 2. TRAININGSLOGIK
-# --------------------------------------------------
 
 SPORTS = {
     "Laufen": 8.0,
@@ -122,82 +134,103 @@ SPORTS = {
     "Schwimmen": 7.0,
     "Tennis": 7.0,
     "Spazieren": 3.0,
-    "Andere": 5.0
+    "Andere": 5.0,
 }
 
-INTENSITY_FACTORS = {
+INTENSITY = {
     "Locker": 0.8,
     "Moderat": 1.0,
-    "Intensiv": 1.2
+    "Intensiv": 1.2,
 }
+
+MEAL_SLOTS = [
+    ("Frühstück", "Frühstück"),
+    ("Mittagessen", "Mittagessen"),
+    ("Snack", "Snack"),
+    ("Abendessen", "Abendessen"),
+]
+
+
+# --------------------------------------------------
+# 2. SESSION STATE
+# --------------------------------------------------
 
 if "training_sessions" not in st.session_state:
     st.session_state.training_sessions = [
-        {"id": 1, "sport": "Laufen", "minutes": 45, "intensity": "Moderat"}
+        {
+            "id": 1,
+            "sport": "Laufen",
+            "duration": 45,
+            "intensity": "Moderat",
+        }
     ]
 
 if "next_training_id" not in st.session_state:
     st.session_state.next_training_id = 2
 
-
-def add_training():
-    new_id = st.session_state.next_training_id
-    st.session_state.training_sessions.append({
-        "id": new_id,
-        "sport": "Krafttraining",
-        "minutes": 60,
-        "intensity": "Moderat"
-    })
-    st.session_state.next_training_id += 1
-
-
-def remove_training(training_id):
-    st.session_state.training_sessions = [
-        session
-        for session in st.session_state.training_sessions
-        if session["id"] != training_id
-    ]
-
-
-# --------------------------------------------------
-# 3. KALORIEN- UND MAKROZIELE
-# --------------------------------------------------
-
-def calculate_targets(
-    age, weight, height, sex, activity, goal, sessions
-):
-    if sex == "Männlich":
-        bmr = 10 * weight + 6.25 * height - 5 * age + 5
-    else:
-        bmr = 10 * weight + 6.25 * height - 5 * age - 161
-
-    activity_factors = {
-        "Wenig aktiv": 1.2,
-        "Leicht aktiv": 1.375,
-        "Moderat aktiv": 1.55,
-        "Sehr aktiv": 1.725
+if "meal_choices" not in st.session_state:
+    st.session_state.meal_choices = {
+        "Frühstück": "Porridge mit Beeren und Skyr",
+        "Mittagessen": "Poulet mit Reis und Gemüse",
+        "Snack": "Skyr-Bananen-Snack",
+        "Abendessen": "Lachs mit Kartoffeln und Gemüse",
     }
 
-    # Aktivitätsniveau beschreibt den Alltag ohne geplantes Training.
-    baseline = bmr * activity_factors[activity]
+if "portion_results" not in st.session_state:
+    st.session_state.portion_results = None
 
-    total_training_kcal = 0
+if "shopping_checked" not in st.session_state:
+    st.session_state.shopping_checked = {}
 
-    for session in sessions:
+
+# --------------------------------------------------
+# 3. BERECHNUNGEN
+# --------------------------------------------------
+
+def calculate_training_calories(weight):
+    """Schätzt zusätzliche Trainingskalorien mit MET-Näherungen."""
+    total = 0.0
+
+    for session in st.session_state.training_sessions:
         met = SPORTS[session["sport"]]
-        intensity = INTENSITY_FACTORS[session["intensity"]]
-        minutes = session["minutes"]
+        intensity = INTENSITY[session["intensity"]]
+        hours = session["duration"] / 60
 
-        # Nettoverbrauch über den Ruheverbrauch hinaus.
-        session_kcal = (
-            max(0, met - 1) * 3.5 * weight / 200
-            * minutes * intensity
-        )
-        total_training_kcal += session_kcal
+        # Ruheverbrauch während des Trainings abziehen,
+        # damit die Trainingsenergie nicht doppelt gezählt wird.
+        gross = met * weight * hours * intensity
+        resting = 1.0 * weight * hours
+        net = max(0, gross - resting)
 
-    # Nur ein Anteil wird addiert, da der Basiswert bereits
-    # Alltagsbewegung enthält und Schätzungen ungenau sind.
-    calories = baseline + total_training_kcal * 0.75
+        total += net
+
+    return total
+
+
+def calculate_targets(
+    age, weight, height, sex, activity, goal
+):
+    """Schätzt Tagesenergie und Makroziele."""
+    if sex == "Männlich":
+        bmr = 10 * weight + 6.25 * height - 5 * age + 5
+    elif sex == "Weiblich":
+        bmr = 10 * weight + 6.25 * height - 5 * age - 161
+    else:
+        # Näherungswert bei nicht-binärer/anderer Auswahl
+        bmr = 10 * weight + 6.25 * height - 5 * age - 78
+
+    # Aktivitätsfaktor bezieht sich auf den Alltag
+    # ohne die separat eingetragenen Trainingseinheiten.
+    activity_factors = {
+        "Überwiegend sitzend": 1.2,
+        "Leicht aktiv": 1.3,
+        "Aktiver Alltag": 1.4,
+    }
+
+    daily_activity = bmr * activity_factors[activity]
+    training_kcal = calculate_training_calories(weight)
+
+    calories = daily_activity + training_kcal
 
     if goal == "Muskelaufbau":
         calories *= 1.08
@@ -209,83 +242,103 @@ def calculate_targets(
     carbs = max(0, (calories - protein * 4 - fat * 9) / 4)
 
     return {
-        "kcal": round(calories),
+        "bmr": round(bmr),
+        "training_kcal": round(training_kcal),
+        "calories": round(calories),
         "protein": round(protein),
         "carbs": round(carbs),
         "fat": round(fat),
-        "training_kcal": round(total_training_kcal)
     }
 
 
-# --------------------------------------------------
-# 4. MENÜOPTIMIERUNG
-# --------------------------------------------------
+def totals_for_plan(names, portions):
+    totals = {
+        "kcal": 0.0,
+        "protein": 0.0,
+        "carbs": 0.0,
+        "fat": 0.0,
+    }
 
-def calculate_nutrition(names, portions):
-    result = {"kcal": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+    for name, portion in zip(names, portions):
+        recipe = RECIPES[name]
+        for key in totals:
+            totals[key] += recipe[key] * portion
 
-    for name, factor in zip(names, portions):
-        for key in result:
-            result[key] += RECIPES[name][key] * factor
-
-    return result
+    return totals
 
 
 def optimize_portions(names, targets):
+    """
+    Sucht Portionen, die den Tageszielen nahekommen.
+    Die Grenzen verhindern extrem kleine oder grosse Portionen.
+    """
     portions = [1.0 for _ in names]
 
-    weights = {"kcal": 8.0, "protein": 2.0, "carbs": 1.5, "fat": 1.0}
+    # Schrittweise Verbesserung jeder Portion
+    for _ in range(8):
+        for i in range(len(portions)):
+            best_portion = portions[i]
+            best_loss = float("inf")
 
-    def loss(candidate):
-        totals = calculate_nutrition(names, candidate)
-        score = 0.0
+            for candidate in [
+                0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+                1.1, 1.2, 1.3, 1.4, 1.5, 1.7,
+                1.9, 2.1, 2.3, 2.5
+            ]:
+                trial = portions.copy()
+                trial[i] = candidate
+                totals = totals_for_plan(names, trial)
 
-        for key, weight in weights.items():
-            target = targets[key]
-            if target > 0:
-                score += weight * ((totals[key] - target) / target) ** 2
+                calorie_error = (
+                    (totals["kcal"] - targets["calories"])
+                    / max(targets["calories"], 1)
+                )
+                protein_error = (
+                    (totals["protein"] - targets["protein"])
+                    / max(targets["protein"], 1)
+                )
+                carb_error = (
+                    (totals["carbs"] - targets["carbs"])
+                    / max(targets["carbs"], 1)
+                )
+                fat_error = (
+                    (totals["fat"] - targets["fat"])
+                    / max(targets["fat"], 1)
+                )
 
-        score += sum(0.08 * (factor - 1.0) ** 2 for factor in candidate)
-        return score
+                portion_penalty = sum(
+                    (p - 1.0) ** 2 for p in trial
+                ) / len(trial)
 
-    for step in [0.25, 0.10, 0.04, 0.015]:
-        for _ in range(3):
-            for i in range(len(portions)):
-                current = portions[i]
-                best_factor = current
-                best_score = loss(portions)
+                loss = (
+                    8 * calorie_error ** 2
+                    + 2 * protein_error ** 2
+                    + 1.5 * carb_error ** 2
+                    + 1 * fat_error ** 2
+                    + 0.04 * portion_penalty
+                )
 
-                for direction in (-1, 1):
-                    test_factor = max(0.4, min(2.2, current + direction * step))
-                    candidate = portions.copy()
-                    candidate[i] = test_factor
-                    score = loss(candidate)
+                if loss < best_loss:
+                    best_loss = loss
+                    best_portion = candidate
 
-                    if score < best_score:
-                        best_score = score
-                        best_factor = test_factor
-
-                portions[i] = best_factor
+            portions[i] = best_portion
 
     return portions
 
 
-def unit_for(ingredient):
-    if ingredient.endswith("(Stück)"):
-        return "Stück"
-    if ingredient.endswith("(ml)"):
-        return "ml"
-    return "g"
+def build_shopping_list(names, portions):
+    shopping = defaultdict(float)
 
+    for name, portion in zip(names, portions):
+        for ingredient, amount in RECIPES[name]["ingredients"].items():
+            shopping[ingredient] += amount * portion
 
-def format_amount(amount, unit):
-    if unit == "Stück":
-        return f"{amount:.1f} Stück"
-    return f"{amount:.0f} {unit}"
+    return dict(sorted(shopping.items()))
 
 
 # --------------------------------------------------
-# 5. PROFIL
+# 4. PROFIL
 # --------------------------------------------------
 
 st.header("1. Dein Profil")
@@ -293,46 +346,59 @@ st.header("1. Dein Profil")
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    age = st.number_input("Alter", 18, 100, 30)
-    weight = st.number_input("Gewicht (kg)", 35.0, 250.0, 62.0, step=0.5)
+    age = st.number_input(
+        "Alter", min_value=18, max_value=100, value=30
+    )
+    weight = st.number_input(
+        "Gewicht (kg)", min_value=35.0, max_value=250.0,
+        value=62.0, step=0.5
+    )
 
 with c2:
-    height = st.number_input("Grösse (cm)", 130, 230, 165)
-    sex = st.selectbox("Geschlecht für Grundumsatzformel", ["Männlich", "Weiblich"])
+    height = st.number_input(
+        "Grösse (cm)", min_value=130, max_value=230, value=165
+    )
+    sex = st.selectbox(
+        "Berechnungsprofil",
+        ["Männlich", "Weiblich", "Andere / keine Angabe"]
+    )
 
 with c3:
     goal = st.selectbox(
-        "Ernährungsziel",
+        "Dein Ziel",
         ["Leistung erhalten", "Muskelaufbau", "Fettabbau"]
     )
     activity = st.selectbox(
-        "Alltagsaktivität (ohne geplantes Training)",
-        ["Wenig aktiv", "Leicht aktiv", "Moderat aktiv", "Sehr aktiv"],
-        index=1
+        "Alltagsaktivität ohne Training",
+        [
+            "Überwiegend sitzend",
+            "Leicht aktiv",
+            "Aktiver Alltag",
+        ],
     )
 
-# --------------------------------------------------
-# 6. BELIEBIG VIELE TRAININGSEINHEITEN
-# --------------------------------------------------
-
-st.header("2. Dein Training heute")
-st.write(
-    "Füge jede geplante Einheit separat hinzu. "
-    "Sportart, Dauer und Intensität werden pro Einheit erfasst."
+st.caption(
+    "Wähle deine normale Alltagsaktivität. Geplante Sporteinheiten "
+    "werden separat berücksichtigt."
 )
 
-st.button(
-    "＋ Trainingseinheit hinzufügen",
-    on_click=add_training,
-    use_container_width=False
+
+# --------------------------------------------------
+# 5. TRAININGSEINHEITEN
+# --------------------------------------------------
+
+st.header("2. Dein Training")
+
+st.write(
+    "Füge alle geplanten Einheiten für diesen Tag hinzu. "
+    "Jede Einheit wird separat nach Sportart, Dauer und Intensität geschätzt."
 )
 
 remove_id = None
 
-for index, session in enumerate(st.session_state.training_sessions):
+for session in st.session_state.training_sessions:
     with st.container(border=True):
-        st.markdown(f"**Trainingseinheit {index + 1}**")
-
+        st.markdown(f"**Trainingseinheit {session['id']}**")
         c1, c2, c3, c4 = st.columns([2, 1, 1.5, 0.8])
 
         with c1:
@@ -340,183 +406,251 @@ for index, session in enumerate(st.session_state.training_sessions):
                 "Sportart",
                 list(SPORTS.keys()),
                 index=list(SPORTS.keys()).index(session["sport"]),
-                key=f"sport_{session['id']}"
+                key=f"sport_{session['id']}",
             )
 
         with c2:
-            session["minutes"] = st.number_input(
-                "Dauer (Min.)",
+            session["duration"] = st.number_input(
+                "Minuten",
                 min_value=0,
                 max_value=600,
-                value=session["minutes"],
-                step=5,
-                key=f"minutes_{session['id']}"
+                value=session["duration"],
+                step=15,
+                key=f"duration_{session['id']}",
             )
 
         with c3:
             session["intensity"] = st.selectbox(
                 "Intensität",
-                ["Locker", "Moderat", "Intensiv"],
-                index=["Locker", "Moderat", "Intensiv"].index(session["intensity"]),
-                key=f"intensity_{session['id']}"
+                list(INTENSITY.keys()),
+                index=list(INTENSITY.keys()).index(session["intensity"]),
+                key=f"intensity_{session['id']}",
             )
 
         with c4:
             st.write("")
             st.write("")
-            if st.button("Entfernen", key=f"remove_{session['id']}"):
+            if st.button(
+                "Entfernen",
+                key=f"remove_{session['id']}",
+                disabled=len(st.session_state.training_sessions) == 1,
+            ):
                 remove_id = session["id"]
 
 if remove_id is not None:
-    remove_training(remove_id)
+    st.session_state.training_sessions = [
+        s for s in st.session_state.training_sessions
+        if s["id"] != remove_id
+    ]
+    st.session_state.portion_results = None
     st.rerun()
 
+if st.button("＋ Trainingseinheit hinzufügen", type="secondary"):
+    new_id = st.session_state.next_training_id
+    st.session_state.training_sessions.append({
+        "id": new_id,
+        "sport": "Krafttraining",
+        "duration": 60,
+        "intensity": "Moderat",
+    })
+    st.session_state.next_training_id += 1
+    st.session_state.portion_results = None
+    st.rerun()
+
+
+# --------------------------------------------------
+# 6. TAGESZIELE
+# --------------------------------------------------
+
 targets = calculate_targets(
-    age, weight, height, sex, activity, goal,
-    st.session_state.training_sessions
+    age, weight, height, sex, activity, goal
 )
 
-st.header("3. Dein berechnetes Tagesziel")
+st.header("3. Deine geschätzten Tagesziele")
 
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Kalorien", f'{targets["kcal"]} kcal')
-m2.metric("Protein", f'{targets["protein"]} g')
-m3.metric("Kohlenhydrate", f'{targets["carbs"]} g')
-m4.metric("Fett", f'{targets["fat"]} g')
+
+m1.metric("Kalorien", f"{targets['calories']} kcal")
+m2.metric("Protein", f"{targets['protein']} g")
+m3.metric("Kohlenhydrate", f"{targets['carbs']} g")
+m4.metric("Fett", f"{targets['fat']} g")
 
 st.caption(
-    f"Erfasste Einheiten: {len(st.session_state.training_sessions)} · "
-    f"Gesamte Trainingsdauer: "
-    f"{sum(s['minutes'] for s in st.session_state.training_sessions)} Minuten · "
-    f"Geschätzter Brutto-Trainingsverbrauch: "
-    f"{targets['training_kcal']} kcal"
+    f"Geschätzter Grundumsatz: {targets['bmr']} kcal · "
+    f"Zusätzliche Trainingsenergie: ca. {targets['training_kcal']} kcal"
 )
 
 st.info(
-    "Der Trainingsverbrauch ist eine grobe Schätzung. "
-    "Wähle bei der Alltagsaktivität möglichst eine Stufe, die dein "
-    "normales Leben ohne die oben erfassten Trainingseinheiten beschreibt."
+    "Das sind Schätzwerte, keine Messungen. Insbesondere Trainingskalorien "
+    "können deutlich abweichen. Beobachte deine Energie, Regeneration und "
+    "Gewichtsentwicklung und passe die Ziele bei Bedarf an."
 )
 
+
 # --------------------------------------------------
-# 7. MENÜ AUSWÄHLEN
+# 7. MAHLZEITEN AUSWÄHLEN
 # --------------------------------------------------
 
-st.header("4. Dein Menü")
+st.header("4. Dein Tagesmenü")
 
-selected = {}
+st.write(
+    "Wähle deine Gerichte. Anschliessend berechnet PACE passende "
+    "Portionsgrössen für den gesamten Tag."
+)
 
-for category in MEAL_CATEGORIES:
+for slot, category in MEAL_SLOTS:
     options = [
         name for name, recipe in RECIPES.items()
         if recipe["category"] == category
     ]
-    selected[category] = st.selectbox(category, options, key=f"meal_{category}")
 
-if st.button("Portionen optimieren", type="primary"):
-    names = [selected[category] for category in MEAL_CATEGORIES]
+    current = st.session_state.meal_choices[slot]
+    if current not in options:
+        current = options[0]
+
+    st.session_state.meal_choices[slot] = st.selectbox(
+        slot,
+        options,
+        index=options.index(current),
+        key=f"meal_{slot}",
+    )
+
+if st.button("Tagesplan berechnen", type="primary", use_container_width=True):
+    names = [
+        st.session_state.meal_choices[slot]
+        for slot, _ in MEAL_SLOTS
+    ]
     portions = optimize_portions(names, targets)
 
-    st.session_state["optimized_names"] = names
-    st.session_state["optimized_portions"] = portions
+    st.session_state.portion_results = {
+        "names": names,
+        "portions": portions,
+        "targets": deepcopy(targets),
+    }
 
-current_names = [selected[category] for category in MEAL_CATEGORIES]
 
-if (
-    "optimized_names" not in st.session_state
-    or st.session_state["optimized_names"] != current_names
-):
-    st.info("Wähle deine Gerichte und klicke auf «Portionen optimieren».")
-else:
-    names = st.session_state["optimized_names"]
-    portions = st.session_state["optimized_portions"]
-    totals = calculate_nutrition(names, portions)
+# --------------------------------------------------
+# 8. ERGEBNIS
+# --------------------------------------------------
 
-    st.header("5. Dein optimierter Tagesplan")
+if st.session_state.portion_results is not None:
+    results = st.session_state.portion_results
+    names = results["names"]
+    portions = results["portions"]
+    result_targets = results["targets"]
 
-    for category, name, factor in zip(MEAL_CATEGORIES, names, portions):
-        recipe = RECIPES[name]
-        st.markdown(f"**{category}: {name}**")
-        st.write(f"Portionsfaktor: {factor:.2f} × Basisportion")
-
-        ingredients = [
-            f"{ingredient.split(' (')[0]}: "
-            f"{format_amount(amount * factor, unit_for(ingredient))}"
-            for ingredient, amount in recipe["ingredients"].items()
-        ]
-        st.write(" · ".join(ingredients))
-        st.caption(
-            f"Ca. {recipe['kcal'] * factor:.0f} kcal | "
-            f"Protein {recipe['protein'] * factor:.0f} g | "
-            f"Kohlenhydrate {recipe['carbs'] * factor:.0f} g | "
-            f"Fett {recipe['fat'] * factor:.0f} g"
+    # Wenn sich Trainingsziele seit der letzten Berechnung geändert haben,
+    # soll der Nutzer den Plan erneut berechnen.
+    if result_targets != targets:
+        st.warning(
+            "Dein Profil oder Training hat sich geändert. "
+            "Berechne den Tagesplan erneut, damit die Portionen aktualisiert werden."
         )
-        st.divider()
+
+    st.header("5. Dein angepasster Tagesplan")
+
+    for slot, name, portion in zip(
+        [s for s, _ in MEAL_SLOTS], names, portions
+    ):
+        recipe = RECIPES[name]
+        st.markdown(f"**{slot}: {name}**")
+        st.write(
+            f"Portion: **{portion:.1f}×** · "
+            f"{round(recipe['kcal'] * portion)} kcal · "
+            f"Protein {round(recipe['protein'] * portion)} g · "
+            f"Kohlenhydrate {round(recipe['carbs'] * portion)} g · "
+            f"Fett {round(recipe['fat'] * portion)} g"
+        )
+
+        ingredients = []
+        for ingredient, amount in recipe["ingredients"].items():
+            scaled = amount * portion
+            if ingredient.endswith("(Stück)"):
+                quantity = f"{scaled:.1f}"
+            else:
+                quantity = f"{scaled:.0f}"
+            ingredients.append(f"{quantity} {ingredient}")
+
+        st.caption("Zutaten: " + ", ".join(ingredients))
+
+    totals = totals_for_plan(names, portions)
 
     st.header("6. Tagesbilanz")
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Kalorien", f'{totals["kcal"]:.0f} kcal',
-              f'{totals["kcal"] - targets["kcal"]:+.0f} kcal')
-    c2.metric("Protein", f'{totals["protein"]:.0f} g',
-              f'{totals["protein"] - targets["protein"]:+.0f} g')
-    c3.metric("Kohlenhydrate", f'{totals["carbs"]:.0f} g',
-              f'{totals["carbs"] - targets["carbs"]:+.0f} g')
-    c4.metric("Fett", f'{totals["fat"]:.0f} g',
-              f'{totals["fat"] - targets["fat"]:+.0f} g')
+    rows = [
+        ("Kalorien", totals["kcal"], targets["calories"], "kcal"),
+        ("Protein", totals["protein"], targets["protein"], "g"),
+        ("Kohlenhydrate", totals["carbs"], targets["carbs"], "g"),
+        ("Fett", totals["fat"], targets["fat"], "g"),
+    ]
 
-    calorie_diff_pct = (
-        abs(totals["kcal"] - targets["kcal"]) / targets["kcal"] * 100
-        if targets["kcal"] else 0
-    )
-
-    if calorie_diff_pct <= 3:
-        st.success("Das Menü liegt sehr nahe am berechneten Kalorienziel.")
-    elif calorie_diff_pct <= 8:
-        st.warning("Das Menü liegt relativ nahe am Ziel, weicht aber noch etwas ab.")
-    else:
-        st.warning("Das Menü weicht merklich vom Tagesziel ab. Probiere andere Gerichte.")
-
-    st.caption(
-        "Die Optimierung ist eine Näherung. Begrenzte Portionen und "
-        "unterschiedliche Makroverteilungen können Abweichungen verursachen."
-    )
-
-    # --------------------------------------------------
-    # 8. EINKAUFSLISTE
-    # --------------------------------------------------
-
-    st.header("7. Deine Einkaufsliste")
-
-    shopping_list = defaultdict(float)
-
-    for name, factor in zip(names, portions):
-        for ingredient, amount in RECIPES[name]["ingredients"].items():
-            shopping_list[ingredient] += amount * factor
-
-    for ingredient in sorted(shopping_list):
-        unit = unit_for(ingredient)
-        amount_text = format_amount(shopping_list[ingredient], unit)
-        st.checkbox(
-            f"{ingredient.split(' (')[0]} – {amount_text}",
-            key=f"shopping_{ingredient}"
+    for label, actual, target, unit in rows:
+        delta = actual - target
+        st.write(
+            f"**{label}:** {actual:.0f} {unit} von "
+            f"{target:.0f} {unit} · Abweichung: {delta:+.0f} {unit}"
+        )
+        st.progress(
+            min(max(actual / max(target, 1), 0.0), 1.0)
         )
 
-    shopping_text = "\n".join(
-        f"- {ingredient.split(' (')[0]}: "
-        f"{format_amount(amount, unit_for(ingredient))}"
-        for ingredient, amount in sorted(shopping_list.items())
+    calorie_difference = totals["kcal"] - targets["calories"]
+
+    if abs(calorie_difference) <= targets["calories"] * 0.05:
+        st.success("Die Kalorien liegen innerhalb von ungefähr 5 % des Zielwerts.")
+    else:
+        st.info(
+            "Das Menü liegt noch mehr als 5 % vom Kalorienziel entfernt. "
+            "Teste andere Gerichte oder passe die Auswahl an."
+        )
+
+    st.caption(
+        "Die Nährwerte der Rezepte sind Näherungswerte. "
+        "Kalorien und Makros lassen sich nicht immer gleichzeitig exakt treffen."
     )
 
+    # Einkaufsliste
+    st.header("7. Einkaufsliste")
+
+    shopping = build_shopping_list(names, portions)
+
+    shopping_text = ["PACE Nutrition – Einkaufsliste", ""]
+
+    for ingredient, amount in shopping.items():
+        if ingredient.endswith("(Stück)"):
+            quantity = f"{amount:.1f}"
+        else:
+            quantity = f"{amount:.0f}"
+
+        shopping_text.append(f"- {ingredient}: {quantity}")
+
+    for ingredient, amount in shopping.items():
+        label = (
+            f"{ingredient}: {amount:.1f}"
+            if ingredient.endswith("(Stück)")
+            else f"{ingredient}: {amount:.0f}"
+        )
+        st.checkbox(
+            label,
+            key=f"shop_{ingredient}",
+        )
+
     st.download_button(
-        "Einkaufsliste als TXT herunterladen",
-        data=shopping_text,
+        "Einkaufsliste herunterladen",
+        data="\n".join(shopping_text),
         file_name="pace_einkaufsliste.txt",
-        mime="text/plain"
+        mime="text/plain",
+        use_container_width=True,
+    )
+
+else:
+    st.info(
+        "Wähle deine Mahlzeiten aus und klicke auf "
+        "«Tagesplan berechnen», um die Portionsgrössen und Einkaufsliste zu erhalten."
     )
 
 st.divider()
 st.caption(
-    "PACE Nutrition ist ein Planungsprototyp. Kalorienbedarf, "
-    "Trainingsverbrauch und Rezeptnährwerte sind Schätzungen."
+    "PACE Nutrition · Prototyp · Keine medizinische oder "
+    "ernährungsmedizinische Beratung."
 )
