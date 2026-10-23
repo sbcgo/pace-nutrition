@@ -7,14 +7,22 @@ st.set_page_config(
     layout="wide"
 )
 
+# ----------------------------
+# Seitenkopf
+# ----------------------------
+
 st.title("PACE Nutrition")
 st.subheader("Nutrition that adapts to your training")
 st.write(
-    "Deine Ernährung abgestimmt auf Kraft, Ausdauer "
-    "und Muskelaufbau."
+    "Dein persönlicher Ernährungsplan für Kraft, "
+    "Ausdauer und Hybrid-Training."
 )
 
 st.divider()
+
+# ----------------------------
+# 1. Profil
+# ----------------------------
 
 st.header("1. Dein Profil")
 
@@ -22,17 +30,25 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     age = st.number_input(
-        "Alter", min_value=18, max_value=100, value=30
+        "Alter",
+        min_value=18,
+        max_value=100,
+        value=30
     )
     weight = st.number_input(
-        "Gewicht (kg)", min_value=35.0,
-        max_value=250.0, value=62.0, step=0.5
+        "Gewicht (kg)",
+        min_value=35.0,
+        max_value=250.0,
+        value=62.0,
+        step=0.5
     )
 
 with col2:
     height = st.number_input(
-        "Grösse (cm)", min_value=120,
-        max_value=230, value=165
+        "Grösse (cm)",
+        min_value=120,
+        max_value=230,
+        value=165
     )
     sex = st.selectbox(
         "Berechnungsgrundlage",
@@ -58,6 +74,11 @@ with col3:
     )
 
 st.divider()
+
+# ----------------------------
+# 2. Training
+# ----------------------------
+
 st.header("2. Dein heutiges Training")
 
 col1, col2, col3 = st.columns(3)
@@ -77,7 +98,7 @@ with col1:
 
 with col2:
     duration = st.slider(
-        "Dauer (Minuten)",
+        "Trainingsdauer (Minuten)",
         min_value=0,
         max_value=240,
         value=60,
@@ -91,9 +112,18 @@ with col3:
         value="Mittel"
     )
 
-if st.button("Mein Ernährungsziel berechnen", type="primary"):
+calculate = st.button(
+    "Ernährungsplan berechnen",
+    type="primary"
+)
 
-    # Grundumsatz nach Mifflin-St Jeor
+if calculate:
+
+    # ----------------------------
+    # 3. Kalorienbedarf
+    # ----------------------------
+
+    # Mifflin-St Jeor: geschätzter Grundumsatz
     sex_adjustment = 5 if sex == "Männlich" else -161
 
     bmr = (
@@ -103,16 +133,15 @@ if st.button("Mein Ernährungsziel berechnen", type="primary"):
         + sex_adjustment
     )
 
-    # Grobe Alltagsaktivität ohne geplantes Training
-    activity_factor = {
+    activity_factors = {
         "Überwiegend sitzend": 1.35,
         "Gemischt": 1.50,
         "Sehr aktiv": 1.65
-    }[activity]
+    }
 
-    daily_base = bmr * activity_factor
+    base_calories = bmr * activity_factors[activity]
 
-    # Grobe MET-Schätzwerte für den Prototyp
+    # Grobe MET-basierte Schätzung des Trainingsverbrauchs
     met_values = {
         "Ruhetag": 1.0,
         "Krafttraining": 4.5,
@@ -122,74 +151,218 @@ if st.button("Mein Ernährungsziel berechnen", type="primary"):
         "Koppeltraining": 7.0
     }
 
-    intensity_factor = {
+    intensity_factors = {
         "Leicht": 0.75,
         "Mittel": 1.0,
         "Intensiv": 1.20
-    }[intensity]
+    }
 
-    # Nur zusätzliche Energie über Ruheverbrauch
-    training_kcal = max(
+    training_calories = max(
         0,
-        (met_values[training] * 3.5 * weight / 200 - 1)
+        (
+            met_values[training] * 3.5 * weight / 200 - 1
+        )
         * duration
-        * intensity_factor
+        * intensity_factors[intensity]
     )
 
-    # Geschätzter Tagesbedarf
-    maintenance = daily_base + training_kcal
+    maintenance_calories = base_calories + training_calories
 
-    goal_factor = {
+    goal_factors = {
         "Muskeln aufbauen": 1.08,
         "Leistung verbessern": 1.00,
         "Gewicht halten": 1.00
-    }[goal]
+    }
 
-    target_kcal = maintenance * goal_factor
+    target_calories = maintenance_calories * goal_factors[goal]
 
-    # Makros: Protein und Fett zuerst, Rest Kohlenhydrate
+    # ----------------------------
+    # 4. Makronährstoffe
+    # ----------------------------
+
     protein = weight * 1.8
     fat = weight * 0.9
+
     carbs = max(
         0,
-        (target_kcal - protein * 4 - fat * 9) / 4
+        (
+            target_calories
+            - protein * 4
+            - fat * 9
+        ) / 4
     )
 
     st.divider()
-    st.header("3. Deine Ergebnisse")
+    st.header("3. Dein Ernährungsziel")
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("Tagesziel", f"{target_kcal:.0f} kcal")
+    c1.metric("Kalorien", f"{target_calories:.0f} kcal")
     c2.metric("Protein", f"{protein:.0f} g")
     c3.metric("Kohlenhydrate", f"{carbs:.0f} g")
     c4.metric("Fett", f"{fat:.0f} g")
 
-    st.subheader("So setzt sich dein Bedarf zusammen")
-
-    st.write(f"**Geschätzter Grundumsatz:** {bmr:.0f} kcal")
-    st.write(f"**Alltagsbedarf inkl. Grundumsatz:** {daily_base:.0f} kcal")
-    st.write(f"**Geschätzter Trainingsverbrauch:** {training_kcal:.0f} kcal")
+    with st.expander("Wie wird dein Bedarf berechnet?"):
+        st.write(f"Geschätzter Grundumsatz: {bmr:.0f} kcal")
+        st.write(
+            "Alltagsbedarf inklusive Grundumsatz: "
+            f"{base_calories:.0f} kcal"
+        )
+        st.write(
+            f"Zusätzlicher Trainingsverbrauch: "
+            f"{training_calories:.0f} kcal"
+        )
+        st.write(
+            "Die Werte sind Schätzungen. Der tatsächliche "
+            "Bedarf kann davon abweichen."
+        )
 
     if goal == "Muskeln aufbauen":
         st.info(
-            "Für den Muskelaufbau wird hier ein kleiner "
-            "Energieüberschuss von 8 % angesetzt. Beobachte "
-            "Gewicht, Leistung und Erholung und passe das "
-            "Ziel bei Bedarf an."
+            "Für den Muskelaufbau wird ein kleiner "
+            "Energieüberschuss von 8 % angesetzt."
         )
     else:
         st.info(
-            "Das Ergebnis ist ein Startwert. Passe die "
-            "Kalorien anhand deiner Entwicklung, deines "
-            "Hungers und deiner Trainingsleistung an."
+            "Nutze den Wert als Ausgangspunkt und beobachte "
+            "deine Energie, Erholung und Gewichtsveränderung."
         )
 
-    st.caption(
-        "Prototyp: Alle Werte sind Schätzungen. "
-        "Der Trainingsverbrauch hängt stark von Tempo, "
-        "Technik und tatsächlicher Intensität ab."
+    # ----------------------------
+    # 5. Beispielmenü
+    # ----------------------------
+
+    st.divider()
+    st.header("4. Dein Tagesmenü")
+
+    st.write(
+        "Die folgenden Mahlzeiten sind ein Beispiel. "
+        "Ihre Portionen werden noch nicht automatisch "
+        "an dein Kalorienziel angepasst."
     )
 
+    meals = [
+        {
+            "meal": "Frühstück",
+            "name": "Porridge mit Beeren und Protein",
+            "kcal": 500,
+            "protein": 35,
+            "carbs": 65,
+            "fat": 12,
+            "ingredients": [
+                "Haferflocken",
+                "Beeren",
+                "Proteinpulver",
+                "Milch oder Pflanzendrink"
+            ]
+        },
+        {
+            "meal": "Mittagessen",
+            "name": "Reis mit Poulet und Gemüse",
+            "kcal": 650,
+            "protein": 45,
+            "carbs": 80,
+            "fat": 14,
+            "ingredients": [
+                "Reis",
+                "Poulet",
+                "Gemüse",
+                "Olivenöl"
+            ]
+        },
+        {
+            "meal": "Snack",
+            "name": "Banane mit Skyr",
+            "kcal": 250,
+            "protein": 20,
+            "carbs": 35,
+            "fat": 2,
+            "ingredients": [
+                "Banane",
+                "Skyr"
+            ]
+        },
+        {
+            "meal": "Abendessen",
+            "name": "Lachs mit Kartoffeln und Gemüse",
+            "kcal": 600,
+            "protein": 40,
+            "carbs": 55,
+            "fat": 22,
+            "ingredients": [
+                "Lachs",
+                "Kartoffeln",
+                "Gemüse",
+                "Olivenöl"
+            ]
+        }
+    ]
+
+    for meal in meals:
+        with st.expander(
+            f"{meal['meal']}: {meal['name']}",
+            expanded=True
+        ):
+            st.write(
+                f"**{meal['kcal']} kcal** · "
+                f"Protein {meal['protein']} g · "
+                f"Kohlenhydrate {meal['carbs']} g · "
+                f"Fett {meal['fat']} g"
+            )
+            st.write("Zutaten: " + ", ".join(meal["ingredients"]))
+
+    total_kcal = sum(meal["kcal"] for meal in meals)
+    total_protein = sum(meal["protein"] for meal in meals)
+    total_carbs = sum(meal["carbs"] for meal in meals)
+    total_fat = sum(meal["fat"] for meal in meals)
+
+    st.subheader("Tagesübersicht")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        "Menü-Kalorien",
+        f"{total_kcal} kcal",
+        delta=f"{total_kcal - target_calories:.0f} kcal zum Ziel"
+    )
+    c2.metric("Protein gesamt", f"{total_protein} g")
+    c3.metric("Kohlenhydrate gesamt", f"{total_carbs} g")
+    c4.metric("Fett gesamt", f"{total_fat} g")
+
+    if total_kcal < target_calories:
+        st.info(
+            f"Zum geschätzten Tagesziel fehlen noch "
+            f"{target_calories - total_kcal:.0f} kcal."
+        )
+    elif total_kcal > target_calories:
+        st.info(
+            f"Der Beispielmenüplan liegt "
+            f"{total_kcal - target_calories:.0f} kcal über deinem Ziel."
+        )
+    else:
+        st.success("Der Beispielmenüplan entspricht deinem Tagesziel.")
+
+    # ----------------------------
+    # 6. Einkaufsliste
+    # ----------------------------
+
+    st.divider()
+    st.header("5. Deine Einkaufsliste")
+
+    ingredients = sorted({
+        ingredient
+        for meal in meals
+        for ingredient in meal["ingredients"]
+    })
+
+    st.write("Wähle die Zutaten aus, die du einkaufen möchtest.")
+
+    for ingredient in ingredients:
+        st.checkbox(ingredient, key=f"shopping_{ingredient}")
+
 st.divider()
-st.caption("PACE Nutrition | Your training. Your fuel.")
+
+st.caption(
+    "PACE Nutrition · Your training. Your fuel. "
+    "Alle Nährwerte und Energiebedarfe sind Schätzungen."
+)
