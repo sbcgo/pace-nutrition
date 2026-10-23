@@ -13,6 +13,7 @@ FOODS = {
     "Müsli": (370, 10, 64, 7, "carb"),
     "Reis, trocken": (360, 7, 80, 0.8, "carb"),
     "Vollkornpasta, trocken": (350, 13, 65, 2.5, "carb"),
+    "Normale Pasta (trocken)": {"kcal": 359, "protein": 12.5, "carbs": 72, "fat": 1.5, "category": "carbs"},
     "Couscous, trocken": (376, 12.8, 77, 0.6, "carb"),
     "Quinoa, trocken": (368, 14, 64, 6, "carb"),
     "Kartoffeln": (77, 2, 17, 0.1, "carb"),
