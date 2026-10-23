@@ -5,24 +5,24 @@ from collections import defaultdict
 st.set_page_config(
     page_title="PACE Nutrition",
     page_icon="🥗",
-    layout="wide"
+    layout="wide",
 )
 
 st.title("🥗 PACE Nutrition")
-st.subheader("Deine Ernährung. Dein Training. Dein Fortschritt.")
+st.subheader("Deine Ernährung passend zu deinem Training")
 st.write(
-    "Dein Ernährungsplaner für Hybrid-Athleten: "
-    "günstige Mahlzeiten, passende Makros und eine praktische Einkaufsliste."
+    "Automatische Portionsberechnung, individuelle Makroziele "
+    "und eine Einkaufsliste, die sich an dein Menü anpasst."
 )
 
 st.info(
-    "Die Angaben sind Schätzwerte und dienen der Orientierung. "
-    "Der Prototyp ersetzt keine individuelle Ernährungsberatung."
+    "Die Berechnung verwendet hinterlegte Durchschnittswerte. "
+    "Die tatsächlichen Nährwerte hängen von Produkt, Marke und Zubereitung ab."
 )
 
 # =====================================================
-# REZEPTDATENBANK
-# Nährwerte pro Portion; Mengen sind Richtwerte.
+# REZEPTE
+# Nährwerte und Zutatenmengen jeweils pro Basisportion
 # =====================================================
 
 RECIPES = {
@@ -35,7 +35,6 @@ RECIPES = {
             "Beeren (frisch oder TK)": (100, "g"),
             "Banane": (100, "g"),
         },
-        "description": "Kohlenhydratreiches Frühstück für aktive Tage."
     },
     "Overnight Oats mit Apfel und Quark": {
         "category": "Frühstück",
@@ -46,7 +45,6 @@ RECIPES = {
             "Apfel": (150, "g"),
             "Milch": (100, "ml"),
         },
-        "description": "Günstig, proteinreich und gut vorzubereiten."
     },
     "Eierbrot mit Hüttenkäse": {
         "category": "Frühstück",
@@ -57,7 +55,6 @@ RECIPES = {
             "Hüttenkäse": (100, "g"),
             "Tomaten": (100, "g"),
         },
-        "description": "Herzhaftes Frühstück mit Protein."
     },
     "Poulet mit Reis und Gemüse": {
         "category": "Mittagessen",
@@ -68,7 +65,6 @@ RECIPES = {
             "Gemüsemix": (200, "g"),
             "Olivenöl": (5, "ml"),
         },
-        "description": "Günstiger Meal-Prep-Klassiker."
     },
     "Linsen-Bolognese mit Pasta": {
         "category": "Mittagessen",
@@ -80,7 +76,6 @@ RECIPES = {
             "Zwiebeln": (50, "g"),
             "Olivenöl": (5, "ml"),
         },
-        "description": "Preiswerte pflanzliche Mahlzeit mit vielen Kohlenhydraten."
     },
     "Tofu-Reis-Pfanne": {
         "category": "Mittagessen",
@@ -91,7 +86,6 @@ RECIPES = {
             "Gemüsemix": (200, "g"),
             "Sojasauce": (15, "ml"),
         },
-        "description": "Pflanzliche Alternative mit Reis und Gemüse."
     },
     "Skyr mit Banane und Haferflocken": {
         "category": "Snack",
@@ -101,7 +95,6 @@ RECIPES = {
             "Banane": (120, "g"),
             "Haferflocken": (30, "g"),
         },
-        "description": "Praktischer Snack vor oder nach dem Training."
     },
     "Brot mit Hüttenkäse": {
         "category": "Snack",
@@ -111,7 +104,6 @@ RECIPES = {
             "Hüttenkäse": (100, "g"),
             "Gurke": (80, "g"),
         },
-        "description": "Einfacher Snack aus wenigen Zutaten."
     },
     "Lachs mit Kartoffeln und Gemüse": {
         "category": "Abendessen",
@@ -122,7 +114,6 @@ RECIPES = {
             "Gemüsemix": (200, "g"),
             "Olivenöl": (5, "ml"),
         },
-        "description": "Proteinreiches Abendessen mit Kohlenhydraten."
     },
     "Poulet-Kartoffel-Blech": {
         "category": "Abendessen",
@@ -133,7 +124,6 @@ RECIPES = {
             "Gemüsemix": (200, "g"),
             "Olivenöl": (5, "ml"),
         },
-        "description": "Preiswerte, sättigende Mahlzeit."
     },
     "Kichererbsen-Curry mit Reis": {
         "category": "Abendessen",
@@ -145,7 +135,6 @@ RECIPES = {
             "Kokosmilch": (50, "ml"),
             "Zwiebeln": (50, "g"),
         },
-        "description": "Günstiges pflanzliches Gericht mit vielen Kohlenhydraten."
     },
 }
 
@@ -163,8 +152,8 @@ DEFAULT_MEALS = {
     "dinner": "Poulet-Kartoffel-Blech",
 }
 
-def fmt(number):
-    return f"{round(number):,}".replace(",", "'")
+def fmt(value):
+    return f"{round(value):,}".replace(",", "'")
 
 def recipe_options(category):
     return [
@@ -172,17 +161,101 @@ def recipe_options(category):
         if recipe["category"] == category
     ]
 
-def sum_recipes(names):
+def calculate_totals(names, portions):
     totals = {
-        "kcal": 0,
-        "protein": 0,
-        "carbs": 0,
-        "fat": 0,
+        "kcal": 0.0,
+        "protein": 0.0,
+        "carbs": 0.0,
+        "fat": 0.0,
     }
-    for name in names:
+
+    for name, portion in zip(names, portions):
         for key in totals:
-            totals[key] += RECIPES[name][key]
+            totals[key] += RECIPES[name][key] * portion
+
     return totals
+
+def optimize_portions(names, calorie_target, protein_target,
+                      carbs_target, fat_target):
+    """
+    Optimiert die Portionsfaktoren anhand von Kalorien und Makros.
+    Die Kalorien haben das höchste Gewicht. Die Portionsfaktoren
+    bleiben in einem praktikablen Bereich von 0.35 bis 2.5.
+    """
+    portions = [1.0 for _ in names]
+
+    # Kalorien werden am stärksten gewichtet.
+    targets = {
+        "kcal": max(calorie_target, 1),
+        "protein": max(protein_target, 1),
+        "carbs": max(carbs_target, 1),
+        "fat": max(fat_target, 1),
+    }
+
+    weights = {
+        "kcal": 8.0,
+        "protein": 2.0,
+        "carbs": 1.5,
+        "fat": 1.0,
+    }
+
+    def loss(candidate_portions):
+        totals = calculate_totals(names, candidate_portions)
+        result = 0.0
+
+        for key in targets:
+            relative_error = (
+                (totals[key] - targets[key]) / targets[key]
+            )
+            result += weights[key] * relative_error ** 2
+
+        # Extreme Portionsgrössen leicht bestrafen.
+        for portion in candidate_portions:
+            result += 0.025 * (portion - 1.0) ** 2
+
+        return result
+
+    # Einfache coordinate-search-Optimierung ohne Zusatzbibliotheken.
+    steps = [0.25, 0.12, 0.06, 0.03, 0.01]
+
+    for step in steps:
+        improved = True
+        while improved:
+            improved = False
+            current_loss = loss(portions)
+
+            for i in range(len(portions)):
+                best_value = portions[i]
+                best_loss = current_loss
+
+                for change in (-step, step):
+                    candidate = portions.copy()
+                    candidate[i] = min(
+                        2.5, max(0.35, candidate[i] + change)
+                    )
+                    candidate_loss = loss(candidate)
+
+                    if candidate_loss < best_loss:
+                        best_loss = candidate_loss
+                        best_value = candidate[i]
+
+                if best_value != portions[i]:
+                    portions[i] = best_value
+                    current_loss = best_loss
+                    improved = True
+
+    # Letzte proportionale Korrektur: Kalorienziel exakt auf
+    # Basis der hinterlegten Rezeptwerte treffen, sofern möglich.
+    totals = calculate_totals(names, portions)
+
+    if totals["kcal"] > 0:
+        scale = calorie_target / totals["kcal"]
+        portions = [
+            min(2.5, max(0.35, portion * scale))
+            for portion in portions
+        ]
+
+    return portions
 
 # =====================================================
 # PROFIL
@@ -190,23 +263,22 @@ def sum_recipes(names):
 
 st.header("👤 Dein Profil")
 
-col1, col2, col3 = st.columns(3)
+c1, c2, c3 = st.columns(3)
 
-with col1:
+with c1:
     age = st.number_input(
         "Alter", min_value=16, max_value=100, value=30
     )
 
-with col2:
+with c2:
     weight = st.number_input(
         "Gewicht (kg)", min_value=35.0, max_value=200.0,
         value=62.0, step=0.5
     )
 
-with col3:
+with c3:
     height = st.number_input(
-        "Grösse (cm)", min_value=130, max_value=230,
-        value=165
+        "Grösse (cm)", min_value=130, max_value=230, value=165
     )
 
 sex = st.selectbox("Geschlecht", ["Männlich", "Weiblich"])
@@ -230,16 +302,16 @@ st.divider()
 
 st.header("🏃 Deine heutige Trainingseinheit")
 
-col4, col5 = st.columns(2)
+c4, c5 = st.columns(2)
 
-with col4:
+with c4:
     training_type = st.selectbox(
         "Trainingsart",
         ["Ruhetag", "Krafttraining", "Laufen", "Radfahren",
          "Schwimmen", "Koppeltraining"]
     )
 
-with col5:
+with c5:
     intensity = st.selectbox(
         "Trainingsintensität",
         ["Leicht", "Moderat", "Intensiv"],
@@ -248,14 +320,11 @@ with col5:
 
 duration = st.slider(
     "Trainingsdauer (Minuten)",
-    min_value=0,
-    max_value=240,
-    value=60,
-    step=15
+    min_value=0, max_value=240, value=60, step=15
 )
 
 # =====================================================
-# KALORIEN UND MAKROS
+# TAGESZIELE
 # =====================================================
 
 if sex == "Männlich":
@@ -289,8 +358,7 @@ intensity_factors = {
 
 training_calories = (
     met_values[training_type]
-    * 3.5
-    * weight / 200
+    * 3.5 * weight / 200
     * duration
     * intensity_factors[intensity]
 )
@@ -312,34 +380,31 @@ carb_target = max(
 st.divider()
 st.header("🎯 Deine geschätzten Tagesziele")
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Kalorien", f"{fmt(calorie_target)} kcal")
-c2.metric("Protein", f"{round(protein_target)} g")
-c3.metric("Kohlenhydrate", f"{round(carb_target)} g")
-c4.metric("Fett", f"{round(fat_target)} g")
-
-st.caption(
-    "Diese Werte sind Schätzungen. Der tatsächliche Bedarf hängt unter "
-    "anderem von Trainingsbelastung, Erholung und individuellem Stoffwechsel ab."
-)
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Kalorien", f"{fmt(calorie_target)} kcal")
+m2.metric("Protein", f"{round(protein_target)} g")
+m3.metric("Kohlenhydrate", f"{round(carb_target)} g")
+m4.metric("Fett", f"{round(fat_target)} g")
 
 # =====================================================
-# MENÜPLAN MIT AUSTAUSCHBAREN MAHLZEITEN
+# MENÜPLAN UND MAHLZEITENAUSTAUSCH
 # =====================================================
 
 st.divider()
-st.header("🍽️ Dein Menüplan")
+st.header("🍽️ Dein automatisch angepasster Menüplan")
+
 st.write(
-    "Wähle für jede Mahlzeit ein Gericht. "
-    "Der Menüvergleich und die Einkaufsliste werden automatisch aktualisiert."
+    "Wähle deine bevorzugten Gerichte. PACE passt die Portionsgrössen "
+    "an dein Tagesziel an und berechnet die Einkaufsliste neu."
 )
 
-# Auswahlwerte werden in der Session gespeichert und bleiben
-# auch beim Anklicken der Checkboxen erhalten.
+# Speichert die Auswahl über Streamlit-Neuberechnungen hinweg.
 for slot_key, default_recipe in DEFAULT_MEALS.items():
     state_key = f"meal_{slot_key}"
     if state_key not in st.session_state:
         st.session_state[state_key] = default_recipe
+
+selected_names = []
 
 for category, slot_key in SLOTS:
     state_key = f"meal_{slot_key}"
@@ -353,100 +418,92 @@ for category, slot_key in SLOTS:
         options,
         key=state_key
     )
+    selected_names.append(selected)
 
-    recipe = RECIPES[selected]
+# Optimiert Portionen bei jeder Änderung von Profil,
+# Training oder Mahlzeitenauswahl.
+portions = optimize_portions(
+    selected_names,
+    calorie_target,
+    protein_target,
+    carb_target,
+    fat_target,
+)
+
+# Menü ausgeben
+for name, portion in zip(selected_names, portions):
+    recipe = RECIPES[name]
 
     with st.container(border=True):
-        st.subheader(selected)
-        st.write(recipe["description"])
+        st.subheader(name)
+        st.write(f"**Portion:** {portion:.2f} Basisportion(en)")
 
         a, b, c, d = st.columns(4)
-        a.metric("Kalorien", f'{recipe["kcal"]} kcal')
-        b.metric("Protein", f'{recipe["protein"]} g')
-        c.metric("Kohlenhydrate", f'{recipe["carbs"]} g')
-        d.metric("Fett", f'{recipe["fat"]} g')
+        a.metric("Kalorien", f'{round(recipe["kcal"] * portion)} kcal')
+        b.metric("Protein", f'{round(recipe["protein"] * portion)} g')
+        c.metric("Kohlenhydrate", f'{round(recipe["carbs"] * portion)} g')
+        d.metric("Fett", f'{round(recipe["fat"] * portion)} g')
 
-selected_names = [
-    st.session_state[f"meal_{slot_key}"]
-    for _, slot_key in SLOTS
-]
-
-totals = sum_recipes(selected_names)
+totals = calculate_totals(selected_names, portions)
 
 st.divider()
 st.header("📊 Dein Menü im Vergleich zum Tagesziel")
 
-m1, m2, m3, m4 = st.columns(4)
-
-m1.metric(
+a, b, c, d = st.columns(4)
+a.metric(
     "Menü-Kalorien",
     f'{fmt(totals["kcal"])} kcal',
-    delta=f'{round(totals["kcal"] - calorie_target):+} kcal zum Ziel'
+    delta=f'{round(totals["kcal"] - calorie_target):+} kcal'
 )
-
-m2.metric(
+b.metric(
     "Protein",
-    f'{totals["protein"]} g',
+    f'{round(totals["protein"])} g',
     delta=f'{round(totals["protein"] - protein_target):+} g'
 )
-
-m3.metric(
+c.metric(
     "Kohlenhydrate",
-    f'{totals["carbs"]} g',
+    f'{round(totals["carbs"])} g',
     delta=f'{round(totals["carbs"] - carb_target):+} g'
 )
-
-m4.metric(
+d.metric(
     "Fett",
-    f'{totals["fat"]} g',
+    f'{round(totals["fat"])} g',
     delta=f'{round(totals["fat"] - fat_target):+} g'
 )
 
-if totals["kcal"] < calorie_target * 0.85:
-    st.warning(
-        "Dein Menü liegt deutlich unter dem geschätzten Tagesziel. "
-        "Ergänze bei Bedarf weitere Portionen oder Snacks."
-    )
-elif totals["kcal"] > calorie_target * 1.15:
-    st.info(
-        "Dein Menü liegt über dem geschätzten Tagesziel. "
-        "Du kannst Gerichte austauschen oder Portionen anpassen."
-    )
-else:
-    st.success(
-        "Die Kalorien deines Menüs liegen ungefähr in der Nähe "
-        "des geschätzten Tagesziels."
-    )
-
 st.caption(
-    "Die Nährwerte pro Rezept sind hinterlegt und werden beim Austausch "
-    "aktualisiert. Portionsgrössen werden noch nicht automatisch angepasst."
+    "Der Optimierer priorisiert Kalorien und versucht gleichzeitig, "
+    "Protein, Kohlenhydrate und Fett möglichst gut zu treffen. "
+    "Durch begrenzte Portionsgrössen und unterschiedliche Rezept-Makros "
+    "können Abweichungen bestehen bleiben."
+)
+
+st.warning(
+    "Wichtig: Die Kalorienziele selbst sind Schätzungen. Exakte "
+    "Übereinstimmung in der App bedeutet nicht automatisch, dass der "
+    "geschätzte Bedarf physiologisch exakt ist."
 )
 
 # =====================================================
-# EINKAUFSLISTE
-# Zutaten aus den aktuell ausgewählten Gerichten zusammenfassen
+# EINKAUFSLISTE MIT SKALIERTEN ZUTATENMENGEN
 # =====================================================
 
 st.divider()
-st.header("🛒 Deine Einkaufsliste")
+st.header("🛒 Einkaufsliste")
 
 st.write(
-    "Die Einkaufsliste passt sich deinen ausgewählten Gerichten an. "
-    "Hake ab, was du bereits eingekauft hast."
+    "Die Mengen werden anhand der angepassten Portionsgrössen berechnet. "
+    "Checkboxen bleiben beim Anklicken erhalten."
 )
 
 shopping = defaultdict(lambda: {"amount": 0.0, "unit": ""})
 
-for recipe_name in selected_names:
-    for ingredient, (amount, unit) in RECIPES[recipe_name]["ingredients"].items():
-        shopping[ingredient]["amount"] += amount
+for name, portion in zip(selected_names, portions):
+    for ingredient, (amount, unit) in RECIPES[name]["ingredients"].items():
+        shopping[ingredient]["amount"] += amount * portion
         shopping[ingredient]["unit"] = unit
 
 ingredients_sorted = sorted(shopping.keys())
-
-if "shopping_checked" not in st.session_state:
-    st.session_state.shopping_checked = {}
 
 checked_count = 0
 
@@ -455,28 +512,26 @@ for ingredient in ingredients_sorted:
     unit = shopping[ingredient]["unit"]
 
     if unit == "Stk.":
-        quantity = f"{round(amount)} {unit}"
+        quantity = f"{amount:.1f} {unit}"
     else:
         quantity = f"{round(amount)} {unit}"
 
-    checkbox_key = f"shopping_{ingredient}"
+    key = f"shopping_{ingredient}"
 
-    if checkbox_key not in st.session_state:
-        st.session_state[checkbox_key] = False
+    if key not in st.session_state:
+        st.session_state[key] = False
 
     if st.checkbox(
         f"{ingredient} — {quantity}",
-        key=checkbox_key
+        key=key
     ):
         checked_count += 1
 
-total_ingredients = len(ingredients_sorted)
-progress = checked_count / total_ingredients if total_ingredients else 0
+total_items = len(ingredients_sorted)
+progress = checked_count / total_items if total_items else 0
 
 st.progress(progress)
-st.caption(
-    f"{checked_count} von {total_ingredients} Zutaten erledigt."
-)
+st.caption(f"{checked_count} von {total_items} Zutaten erledigt.")
 
 if st.button("Einkaufsliste zurücksetzen"):
     for ingredient in ingredients_sorted:
@@ -485,7 +540,6 @@ if st.button("Einkaufsliste zurücksetzen"):
 
 st.divider()
 st.caption(
-    "PACE Nutrition ist ein Prototyp und keine medizinische Beratung. "
-    "Nährwerte und Energiebedarf sind Näherungswerte und können je nach "
-    "Lebensmittel, Marke und Zubereitung abweichen."
+    "PACE Nutrition ist ein Prototyp. Die Nährwerte sind Näherungswerte "
+    "und können je nach Produkt und Zubereitung abweichen."
 )
